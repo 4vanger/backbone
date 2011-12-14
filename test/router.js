@@ -5,6 +5,7 @@ $(document).ready(function() {
   var Router = Backbone.Router.extend({
 
     routes: {
+      "noCallback":                 "noCallback",
       "search/:query":              "search",
       "search/:query/p:page":       "search",
       "splat/*args/end":            "splat",
@@ -41,6 +42,8 @@ $(document).ready(function() {
       this.anything = whatever;
     }
 
+    // do not provide a callback method for the noCallback route
+
   });
 
   Backbone.history = null;
@@ -72,9 +75,29 @@ $(document).ready(function() {
   });
 
   test("Router: routes via navigate", 2, function() {
+    Backbone.history.navigate('search/manhattan/p20', {trigger: true});
+    equals(router.query, 'manhattan');
+    equals(router.page, '20');
+  });
+
+  test("Router: routes via navigate for backwards-compatibility", 2, function() {
     Backbone.history.navigate('search/manhattan/p20', true);
     equals(router.query, 'manhattan');
     equals(router.page, '20');
+  });
+
+  asyncTest("Router: routes via navigate with {replace: true}", function() {
+    var historyLength = window.history.length;
+    router.navigate('search/manhattan/start_here');
+    router.navigate('search/manhattan/then_here');
+    router.navigate('search/manhattan/finally_here', {replace: true});
+
+    equals(window.location.hash, "#search/manhattan/finally_here");
+    window.history.go(-1);
+    setTimeout(function() {
+      equals(window.location.hash, "#search/manhattan/start_here");
+      start();
+    }, 500);
   });
 
   asyncTest("Router: routes (splats)", function() {
@@ -111,6 +134,22 @@ $(document).ready(function() {
       start();
       window.location.hash = '';
     }, 10);
+  });
+
+  asyncTest("Router: fires event when router doesn't have callback on it", 1, function() {
+    try{
+      var callbackFired = false;
+      var myCallback = function(){ callbackFired = true; };
+      router.bind("route:noCallback", myCallback);
+      window.location.hash = "noCallback";
+      setTimeout(function(){
+        equals(callbackFired, true);
+        start();
+        window.location.hash = '';
+      }, 10);
+    } catch (err) {
+      ok(false, "an exception was thrown trying to fire the router event with no router handler callback");
+    }
   });
 
 });

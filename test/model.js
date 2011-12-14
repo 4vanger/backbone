@@ -51,6 +51,17 @@ $(document).ready(function() {
     equals(model.one, 1);
   });
 
+  test("Model: initialize with parsed attributes", function() {
+    var Model = Backbone.Model.extend({
+      parse: function(obj) {
+        obj.value += 1;
+        return obj;
+      }
+    });
+    var model = new Model({value: 1}, {parse: true});
+    equals(model.get('value'), 2);
+  });
+
   test("Model: url", function() {
     equals(doc.url(), '/collection/1-the-tempest');
     doc.collection.url = '/collection/';
@@ -140,19 +151,24 @@ $(document).ready(function() {
   });
 
   test("Model: set and unset", function() {
+    expect(8);
     attrs = {id: 'id', foo: 1, bar: 2, baz: 3};
     a = new Backbone.Model(attrs);
     var changeCount = 0;
     a.bind("change:foo", function() { changeCount += 1; });
     a.set({'foo': 2});
-    ok(a.get('foo')== 2, "Foo should have changed.");
+    ok(a.get('foo') == 2, "Foo should have changed.");
     ok(changeCount == 1, "Change count should have incremented.");
     a.set({'foo': 2}); // set with value that is not new shouldn't fire change event
-    ok(a.get('foo')== 2, "Foo should NOT have changed, still 2");
+    ok(a.get('foo') == 2, "Foo should NOT have changed, still 2");
     ok(changeCount == 1, "Change count should NOT have incremented.");
 
+    a.validate = function(attrs) {
+      equals(attrs.foo, void 0, 'ignore values when unsetting');
+    };
     a.unset('foo');
-    ok(a.get('foo')== null, "Foo should have changed");
+    ok(a.get('foo') == null, "Foo should have changed");
+    delete a.validate;
     ok(changeCount == 2, "Change count should have incremented for unset.");
 
     a.unset('id');
@@ -168,6 +184,16 @@ $(document).ready(function() {
     model.unset('a');
     model.unset('a');
     equals(i, 2, 'Unset does not fire an event for missing attributes.');
+  });
+
+  test("Model: unset and changedAttributes", function() {
+    var model = new Backbone.Model({a: 1});
+    model.unset('a', {silent: true});
+    var changedAttributes = model.changedAttributes();
+    ok('a' in changedAttributes, 'changedAttributes should contain unset properties');
+
+    changedAttributes = model.changedAttributes();
+    ok('a' in changedAttributes, 'changedAttributes should contain unset properties when running changedAttributes again after an unset.');
   });
 
   test("Model: using a non-default id attribute.", function() {
@@ -189,8 +215,12 @@ $(document).ready(function() {
 
   test("Model: clear", function() {
     var changed;
-    var model = new Backbone.Model({name : "Model"});
+    var model = new Backbone.Model({id: 1, name : "Model"});
     model.bind("change:name", function(){ changed = true; });
+    model.bind("change", function() {
+      var changedAttrs = model.changedAttributes();
+      ok('name' in changedAttrs);
+    });
     model.clear();
     equals(changed, true);
     equals(model.get('name'), undefined);
@@ -265,6 +295,22 @@ $(document).ready(function() {
       ok(_.isEqual(lastRequest[1], model));
     });
     model.set({lastName: 'Hicks'});
+  });
+
+  test("Model: validate after save", function() {
+    var lastError, model = new Backbone.Model();
+    model.validate = function(attrs) {
+      if (attrs.admin) return "Can't change admin status.";
+    };
+    model.sync = function(method, model, options) {
+      options.success.call(this, {admin: true});
+    };
+    model.save(null, {error: function(model, error) {
+      console.log('erroring!');
+      lastError = error;
+    }});
+
+    equals(lastError, "Can't change admin status.");
   });
 
   test("Model: save", function() {
@@ -421,6 +467,17 @@ $(document).ready(function() {
     a = new A();
     b = new B({a: a});
     a.set({state: 'hello'});
+  });
+
+  test("Model: Multiple nested calls to set", function() {
+    var counter = 0, model = new Backbone.Model({});
+    model.bind('change', function() {
+      counter++;
+      model.set({b: 1});
+      model.set({a: 1});
+    })
+    .set({a: 1});
+    equal(counter, 1, 'change is only triggered once');
   });
 
 });
