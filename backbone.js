@@ -260,6 +260,7 @@
       var success = options.success;
       options.success = function(resp, status, xhr) {
         if (!model.set(model.parse(resp, xhr), options)) return false;
+        model.trigger('fetched', model);
         if (success) success(model, resp);
       };
       options.error = wrapError(options.error, model, options);
